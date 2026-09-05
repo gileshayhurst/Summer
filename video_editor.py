@@ -127,7 +127,8 @@ def parse_timestamp_to_seconds(ts: str) -> float:
 def extract_clip(video_path: str, start_sec: float, end_sec: float, output_path: str,
                  fade_out_secs: float = 0.0, title_lines: list | None = None,
                  font_path: str | None = None, height: int | None = None,
-                 fade_in_secs: float = 0.0, show_timer: bool = False) -> None:
+                 fade_in_secs: float = 0.0, show_timer: bool = False,
+                 width: int | None = None) -> None:
     # Re-encode (never stream-copy) so every clip starts on an I-frame.
     # -ss before -i: fast input seek. -t duration (not -to) is relative to the
     # seek point. -avoid_negative_ts make_zero zeroes each clip's timestamps so
@@ -175,14 +176,22 @@ def extract_clip(video_path: str, start_sec: float, end_sec: float, output_path:
             line_height = int(fontsize * 1.35)
             top = max(fontsize, h // 14)
             alpha = _title_alpha_expr(duration)
+            # drawtext has no auto-fit: a line wider than the frame is silently
+            # cropped at both edges, so a long filename renders as an unreadable
+            # middle slice. Shrink only the lines that would overrun (Forven
+            # export stems are ~53 chars); short lines keep the base size.
+            max_w = (width or int(h * 9 / 16)) * 0.92
             for i, line in enumerate(title_lines):
                 tf = out_dir / f"{prefix}_t{i}.txt"
                 # drawtext expands % format specifiers even from a textfile.
                 tf.write_text(line.replace("%", "%%"), encoding="utf-8")
                 y = top + i * line_height
+                # 0.55 * fontsize ≈ average glyph width for the sans faces used here.
+                line_size = min(fontsize,
+                                max(14, int(max_w / (0.55 * max(len(line), 1)))))
                 vf.append(
                     f"drawtext={fontfile_arg}textfile={tf.name}"
-                    f":fontcolor=white:fontsize={fontsize}"
+                    f":fontcolor=white:fontsize={line_size}"
                     f":shadowcolor=black@0.8:shadowx=2:shadowy=2"
                     f":x=w/2-text_w/2:y={y}:alpha={alpha}"
                 )

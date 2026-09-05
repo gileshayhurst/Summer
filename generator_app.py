@@ -389,6 +389,7 @@ def _run_generation_impl(job_id: str, folder: str,
                 "end_sec": seg["end_sec"],
                 "title_lines": seg["title_lines"],
                 "height": height,
+                "width": width,
                 "ok": False,
                 "error": None,
             })
@@ -415,6 +416,7 @@ def _run_generation_impl(job_id: str, folder: str,
                     item["height"],
                     fade_in_secs=TRANSITION_FADE_SECONDS,
                     show_timer=True,
+                    width=item["width"],
                 )
 
             for item in plan:
