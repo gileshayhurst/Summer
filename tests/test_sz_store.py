@@ -153,3 +153,48 @@ def test_marking_aligned_sets_the_timestamp(cleanup):
             (REF_A,),
         )
         assert cur.fetchone()["aligned_at"] is not None
+
+
+def test_ingested_sessions_says_where_an_interview_lives(cleanup):
+    cleanup["refs"] = [REF_A, REF_B]
+    sz_store.record_ingested([REF_A], tenant_public_id="t1",
+                             session_key="sessions/one")
+
+    held = sz_store.ingested_sessions([REF_A, REF_B])
+
+    assert held[REF_A]["session_key"] == "sessions/one"
+    assert held[REF_A]["aligned_at"] is None
+    # Never pulled, so nothing to reuse - not an empty row.
+    assert REF_B not in held
+    assert sz_store.ingested_sessions([]) == {}
+
+
+def test_a_reused_copy_keeps_its_alignment(cleanup):
+    """The whole point of reuse: an aligned interview must not go back through
+    the encoder just because it was pulled into another session."""
+    cleanup["refs"] = [REF_A]
+    sz_store.record_ingested([REF_A], tenant_public_id="t1",
+                             session_key="sessions/one")
+    sz_store.mark_aligned([REF_A])
+
+    sz_store.record_ingested([REF_A], tenant_public_id="t1",
+                             session_key="sessions/two", preserve_aligned=True)
+
+    held = sz_store.ingested_sessions([REF_A])
+    assert held[REF_A]["session_key"] == "sessions/two"
+    assert held[REF_A]["aligned_at"] is not None
+
+
+def test_a_fresh_pull_still_clears_alignment(cleanup):
+    """A fetched transcript is plain, so an old timestamp would describe a file
+    that is no longer there."""
+    cleanup["refs"] = [REF_A]
+    sz_store.record_ingested([REF_A], tenant_public_id="t1",
+                             session_key="sessions/one")
+    sz_store.mark_aligned([REF_A])
+
+    sz_store.record_ingested([REF_A], tenant_public_id="t1",
+                             session_key="sessions/two")
+
+    assert sz_store.ingested_sessions([REF_A])[REF_A]["aligned_at"] is None
+
