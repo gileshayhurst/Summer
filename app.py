@@ -1318,7 +1318,8 @@ def create_app(testing: bool = False) -> Flask:
                     if cancel_event.is_set():
                         executor.shutdown(wait=False, cancel_futures=True)
                         with _jobs_lock:
-                            _jobs[job_id]["status"] = "cancelled"
+                            if job_id in _jobs:
+                                _jobs[job_id]["status"] = "cancelled"
                         _append_log(job_id, "✗ transcription cancelled")
                         return
                     just_done, pending = concurrent.futures.wait(
@@ -1334,13 +1335,18 @@ def create_app(testing: bool = False) -> Flask:
                         except Exception as exc:
                             _append_log(job_id, f"✗ {vp.name} — failed: {exc}")
                             with _jobs_lock:
-                                _jobs[job_id]["error"] = f"{vp.name}: {exc}"
+                                if job_id in _jobs:
+                                    _jobs[job_id]["error"] = f"{vp.name}: {exc}"
                         done_count += 1
                         with _jobs_lock:
+                            if job_id not in _jobs:
+                                return
                             _jobs[job_id]["done"] = done_count
             finally:
                 executor.shutdown(wait=False)
             with _jobs_lock:
+                if job_id not in _jobs:
+                    return
                 _jobs[job_id]["status"] = "done"
                 _jobs[job_id]["result"] = {"folder": folder, "files": filenames}
 
