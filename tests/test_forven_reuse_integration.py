@@ -136,3 +136,31 @@ def test_refresh_really_does_go_back_to_forven(client):
     text = storage.read_file_bytes(f"{second['session_key']}/{REF}.txt").decode("utf-8")
     assert text == PLAIN
     assert sz_store.ingested_sessions([REF])[REF]["aligned_at"] is None
+
+
+def test_the_pull_reports_how_many_transcripts_are_already_aligned(client):
+    """The counts have to come from the transcripts that landed, not from what
+    was reused - a reused copy may itself have been plain."""
+    first = client.post("/forven/pull", json={"refs": [REF]}).get_json()
+    assert first["aligned"] == 0, "a fresh pull is plain"
+    assert first["needs_alignment"] == 1
+
+    _align(first["session_key"])
+    second = client.post("/forven/pull", json={"refs": [REF]}).get_json()
+
+    assert second["reused"] == 1
+    assert second["aligned"] == 1
+    assert second["needs_alignment"] == 0
+
+
+def test_a_reused_but_unaligned_copy_is_not_reported_as_aligned(client):
+    """The message this protects: reuse saves the download either way, but only
+    saves the alignment when the copy we held had been aligned."""
+    first = client.post("/forven/pull", json={"refs": [REF]}).get_json()
+    # Deliberately not aligned - just recorded as pulled.
+    second = client.post("/forven/pull", json={"refs": [REF]}).get_json()
+
+    assert second["reused"] == 1, "the copy should still be reused"
+    assert second["aligned"] == 0
+    assert second["needs_alignment"] == 1
+

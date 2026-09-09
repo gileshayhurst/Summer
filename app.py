@@ -748,8 +748,15 @@ def create_app(testing: bool = False) -> Flask:
 
         # Interviews whose transcript is not ready are skipped, so report what
         # actually landed rather than what was asked for.
-        landed = [Path(k).stem for k in storage.list_keys(session_key)
-                  if k.endswith(".txt")]
+        session_keys = storage.list_keys(session_key)
+        landed = [Path(k).stem for k in session_keys if k.endswith(".txt")]
+
+        # Which of them the encoder still has to do. Read from the transcripts
+        # that actually landed, not inferred from what was reused: a reused copy
+        # may itself have been plain, in which case it saved the download and
+        # nothing else.
+        pending_refs = {Path(k).stem for k in _sessions_needing_encode(session_keys)}
+        needs_alignment = [r for r in landed if r in pending_refs]
 
         if landed and sz_store.is_configured():
             # Recorded in two groups: a copied-in aligned transcript keeps its
@@ -771,6 +778,8 @@ def create_app(testing: bool = False) -> Flask:
                         "ingested": len(landed),
                         "requested": len(refs),
                         "reused": len(reused),
+                        "aligned": len(landed) - len(needs_alignment),
+                        "needs_alignment": len(needs_alignment),
                         "pair_name": pair["name"] if pair else None})
 
     @app.post("/forven/pairs")

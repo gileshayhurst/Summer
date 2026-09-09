@@ -409,26 +409,53 @@
           return;
         }
         const wrap = el("div");
-        let summary = "Pulled " + res.body.ingested + " interview(s) into a session.";
+        const total = res.body.ingested;
+        const need = res.body.needs_alignment;
+
+        let summary = "Pulled " + total + " interview(s) into a session.";
         if (res.body.reused) {
-          // Worth saying out loud: the reused ones skip the download and the
-          // alignment pass entirely, which is where the time goes.
-          summary += " " + res.body.reused + " reused from an earlier pull "
-                   + "(no re-download, no re-alignment).";
+          // Reuse always saves the download. It only saves the alignment when
+          // the copy we held was itself aligned, so that claim belongs to the
+          // status line below, which knows.
+          summary += " " + res.body.reused
+                   + " reused from an earlier pull (no re-download).";
         }
         wrap.appendChild(el("div", null, summary));
-        const line = el("div");
-        line.appendChild(el("span", null, "Next, align it: "));
-        line.appendChild(el("span", null, "Alignment is required before cutting. "));
-        const alignBtn = el("button", "fv-btn", "Align now");
-        const alignStatus = el("span", "fv-count", "");
-        alignStatus.style.marginLeft = "10px";
-        alignBtn.addEventListener("click", function () {
-          alignBtn.disabled = true;
-          align(res.body.session_key, alignStatus);
-        });
-        line.appendChild(alignBtn);
-        line.appendChild(alignStatus);
+
+        const status = el("div");
+        status.style.marginTop = "6px";
+        if (need === 0) {
+          status.textContent = total === 1
+            ? "Its transcript is already aligned - ready to generate."
+            : "All " + total + " transcripts are already aligned - ready to generate.";
+        } else if (need === total) {
+          status.textContent = total === 1
+            ? "Its transcript still needs aligning."
+            : "None of the transcripts are aligned yet.";
+        } else {
+          status.textContent = res.body.aligned + " of " + total
+            + " transcripts are already aligned; " + need
+            + (need === 1 ? " still needs" : " still need") + " aligning.";
+        }
+        wrap.appendChild(status);
+
+        // Only offer alignment when there is something to align. A button that
+        // dispatches nothing and reports "skipped" reads like a failure.
+        if (need > 0) {
+          const line = el("div");
+          line.style.marginTop = "10px";
+          line.appendChild(el("span", null, "Alignment is required before cutting. "));
+          const alignBtn = el("button", "fv-btn", "Align now");
+          const alignStatus = el("span", "fv-count", "");
+          alignStatus.style.marginLeft = "10px";
+          alignBtn.addEventListener("click", function () {
+            alignBtn.disabled = true;
+            align(res.body.session_key, alignStatus);
+          });
+          line.appendChild(alignBtn);
+          line.appendChild(alignStatus);
+          wrap.appendChild(line);
+        }
 
         const go = el("div");
         go.style.marginTop = "12px";
@@ -438,7 +465,6 @@
         createBtn.style.display = "inline-block";
         go.appendChild(createBtn);
         wrap.appendChild(go);
-        wrap.appendChild(line);
         showResult("ok", wrap);
       })
       .catch(function (e) { showResult("bad", el("span", null, "Request failed: " + e.message)); })
